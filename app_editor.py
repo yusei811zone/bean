@@ -3,17 +3,6 @@ from PIL import Image, ImageDraw
 import numpy as np
 from scipy.spatial import KDTree
 import io
-
-# === 🛠️ 核心修復黑科技 (Monkey Patch) ===
-# 強制修復新版 Streamlit 與畫布套件的衝突問題，無畏任何版本更新！
-import streamlit.elements.image
-if not hasattr(streamlit.elements.image, 'image_to_url'):
-    try:
-        from streamlit.elements.lib.image_utils import image_to_url
-        streamlit.elements.image.image_to_url = image_to_url
-    except ImportError:
-        pass
-
 from streamlit_drawable_canvas import st_canvas
 
 # 設定網頁標題為寬螢幕模式
