@@ -1,16 +1,15 @@
 import streamlit as st
 from PIL import Image, ImageDraw
 import numpy as np
-from scipy.spatial import KDTree
 import io
 from streamlit_drawable_canvas import st_canvas
 
 # 設定網頁標題為寬螢幕模式
 st.set_page_config(page_title="8mm 實體積木拼豆編輯器", layout="wide")
-st.title("🎨 8mm 實體積木拼豆編輯器 (雲端穩定版)")
-st.write("左側自由塗抹，右側自動執行「嚴格方格對齊」與即時數量統計。")
+st.title("🎨 8mm 實體積木拼豆編輯器 (原色輪廓版)")
+st.write("完全保留原圖色彩與輪廓，不再強制轉換顏色！左側塗抹，右側自動對齊方格。")
 
-# --- 🎨 數位增豔版：27 色實體積木調色盤 (微調深色系抓取範圍) ---
+# --- 雖然不強制轉換整張圖，但我們還是保留調色盤給「畫筆」使用，方便你手動修補 ---
 BEAD_PALETTE = {
     "黑色": (0, 0, 0), "深灰色": (70, 70, 70), "淺灰色": (200, 200, 200),
     "白色": (255, 255, 255), "透明透白": (240, 248, 255),
@@ -20,8 +19,7 @@ BEAD_PALETTE = {
     "膚色": (255, 218, 185), "奶油色": (255, 253, 208), "棕色": (165, 42, 42),
     "深棕色": (101, 67, 33), "淺綠色": (50, 255, 50), "正綠色": (0, 200, 0),
     "深綠色": (0, 100, 0), "湖水藍": (0, 255, 255), "淺藍色": (0, 191, 255),
-    "天藍色": (0, 127, 255), "正藍色": (0, 0, 255), 
-    "深藍色": (30, 40, 100), # 🌟 微調：更容易抓住小丑原圖偏灰暗的藍色衣服
+    "天藍色": (0, 127, 255), "正藍色": (0, 0, 255), "深藍色": (30, 40, 100),
     "紫色": (148, 0, 211)
 }
 
@@ -29,8 +27,6 @@ def rgb_to_hex(rgb):
     return '#{:02x}{:02x}{:02x}'.format(rgb[0], rgb[1], rgb[2])
 
 color_names = list(BEAD_PALETTE.keys())
-color_values = list(BEAD_PALETTE.values())
-kdtree = KDTree(color_values)
 
 if 'canvas_key_id' not in st.session_state:
     st.session_state.canvas_key_id = 0
@@ -39,27 +35,16 @@ if 'base_img' not in st.session_state:
 if 'current_file_id' not in st.session_state:
     st.session_state.current_file_id = ""
 
-# === 🌟 核心退回：「原圖銳利取點 (NEAREST)」 ===
+# === 🌟 核心修改：完全不改變原圖顏色，只做完美的像素化對齊 ===
 def process_to_beads(image, grid_size):
     img_rgb = image.convert('RGB')
     width, height = img_rgb.size
     cols = grid_size
     rows = int(height * grid_size / width)
     
-    # 不做色彩平均，保持原圖邊緣銳利度
+    # 直接使用 NEAREST 縮放，保留原圖所有的顏色細節與輪廓，不再計算數學差異
     tiny_img = img_rgb.resize((cols, rows), Image.Resampling.NEAREST)
-    tiny_pixels = tiny_img.load()
-    
-    base_img = Image.new('RGB', (cols, rows))
-    pixels = base_img.load()
-    
-    for r in range(rows):
-        for c in range(cols):
-            raw_rgb = tiny_pixels[c, r]
-            _, index = kdtree.query(raw_rgb)
-            pixels[c, r] = color_values[index]
-            
-    return base_img, cols, rows
+    return tiny_img, cols, rows
 
 def draw_preview_template(img, cols, rows, grid_thickness, peg_dot_size, scale_factor=20):
     final_w = cols * scale_factor
@@ -154,9 +139,9 @@ if uploaded_file is not None:
                     if np.any(alphas > 50): 
                         max_alpha_idx = np.argmax(alphas)
                         flat_patch = patch.reshape(-1, 4)
+                        # 直接把畫筆的顏色原封不動地塗上去
                         drawn_r, drawn_g, drawn_b = flat_patch[max_alpha_idx][:3]
-                        _, idx = kdtree.query((drawn_r, drawn_g, drawn_b))
-                        pixels[c, r] = color_values[idx]
+                        pixels[c, r] = (drawn_r, drawn_g, drawn_b)
         
         st.session_state.current_snapped_img = current_preview_img
         preview_display = draw_preview_template(current_preview_img, cols, rows, grid_thickness, peg_dot_size, scale_factor=canvas_scale)
@@ -171,9 +156,9 @@ if uploaded_file is not None:
     
     st.download_button(label="📥 下載最終確認版拼豆底圖", data=byte_im, file_name="bead_template.png", mime="image/png")
     
-    unique, counts = np.unique(np.array(st.session_state.current_snapped_img).reshape(-1, 3), axis=0, return_counts=True)
-    st.write("**當前實際所需數量：**")
-    for color, count in zip(unique, counts):
-        for name, val in BEAD_PALETTE.items():
-            if val == tuple(color):
-                st.write(f"- {name}: **{count}** 顆")
+    # 由於不再強制轉為27色，原圖可能包含幾百種微小的顏色差異
+    # 因此我們取消落落長的顏色清單，改為純粹顯示「總共需要多少顆積木」的長寬資訊
+    st.write("### 📐 畫布資訊")
+    st.write(f"- **水平格數 (寬)**: {cols} 格")
+    st.write(f"- **垂直格數 (高)**: {rows} 格")
+    st.write(f"- **所需積木總數**: **{cols * rows}** 顆")
