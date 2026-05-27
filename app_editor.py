@@ -38,22 +38,27 @@ if 'base_img' not in st.session_state:
 if 'current_file_id' not in st.session_state:
     st.session_state.current_file_id = ""
 
+# === 🌟 核心演算法升級：依照你的邏輯，先融合色彩，再比對調色盤 ===
 def process_to_beads(image, grid_size):
     img_rgb = image.convert('RGB')
     width, height = img_rgb.size
     cols = grid_size
     rows = int(height * grid_size / width)
+    
+    # 1. 先讓 PIL 幫我們把原圖縮小到拼豆格數 (LANCZOS 會完美計算區域平均顏色)
+    tiny_img = img_rgb.resize((cols, rows), Image.Resampling.LANCZOS)
+    tiny_pixels = tiny_img.load()
+    
     base_img = Image.new('RGB', (cols, rows))
     pixels = base_img.load()
-    peg_w = width / cols
-    peg_h = height / rows
+    
+    # 2. 拿這張「已經帶有正確平均色彩的小圖」，去跟 27 色積木比對
     for r in range(rows):
         for c in range(cols):
-            center_x = int((c + 0.5) * peg_w)
-            center_y = int((r + 0.5) * peg_h)
-            raw_rgb = img_rgb.getpixel((center_x, center_y))
+            raw_rgb = tiny_pixels[c, r]
             _, index = kdtree.query(raw_rgb)
             pixels[c, r] = color_values[index]
+            
     return base_img, cols, rows
 
 def draw_preview_template(img, cols, rows, grid_thickness, peg_dot_size, scale_factor=20):
