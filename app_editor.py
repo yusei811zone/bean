@@ -10,7 +10,7 @@ st.set_page_config(page_title="8mm 實體積木拼豆編輯器", layout="wide")
 st.title("🎨 8mm 實體積木拼豆編輯器 (雲端穩定版)")
 st.write("左側自由塗抹，右側自動執行「嚴格方格對齊」與即時數量統計。")
 
-# --- 🎨 數位增豔版：27 色實體積木調色盤 ---
+# --- 🎨 數位增豔版：27 色實體積木調色盤 (微調深色系抓取範圍) ---
 BEAD_PALETTE = {
     "黑色": (0, 0, 0), "深灰色": (70, 70, 70), "淺灰色": (200, 200, 200),
     "白色": (255, 255, 255), "透明透白": (240, 248, 255),
@@ -20,7 +20,8 @@ BEAD_PALETTE = {
     "膚色": (255, 218, 185), "奶油色": (255, 253, 208), "棕色": (165, 42, 42),
     "深棕色": (101, 67, 33), "淺綠色": (50, 255, 50), "正綠色": (0, 200, 0),
     "深綠色": (0, 100, 0), "湖水藍": (0, 255, 255), "淺藍色": (0, 191, 255),
-    "天藍色": (0, 127, 255), "正藍色": (0, 0, 255), "深藍色": (0, 0, 139),
+    "天藍色": (0, 127, 255), "正藍色": (0, 0, 255), 
+    "深藍色": (30, 40, 100), # 🌟 微調：更容易抓住小丑原圖偏灰暗的藍色衣服
     "紫色": (148, 0, 211)
 }
 
@@ -38,21 +39,20 @@ if 'base_img' not in st.session_state:
 if 'current_file_id' not in st.session_state:
     st.session_state.current_file_id = ""
 
-# === 🌟 核心演算法升級：依照你的邏輯，先融合色彩，再比對調色盤 ===
+# === 🌟 核心退回：「原圖銳利取點 (NEAREST)」 ===
 def process_to_beads(image, grid_size):
     img_rgb = image.convert('RGB')
     width, height = img_rgb.size
     cols = grid_size
     rows = int(height * grid_size / width)
     
-    # 1. 先讓 PIL 幫我們把原圖縮小到拼豆格數 (LANCZOS 會完美計算區域平均顏色)
-    tiny_img = img_rgb.resize((cols, rows), Image.Resampling.LANCZOS)
+    # 不做色彩平均，保持原圖邊緣銳利度
+    tiny_img = img_rgb.resize((cols, rows), Image.Resampling.NEAREST)
     tiny_pixels = tiny_img.load()
     
     base_img = Image.new('RGB', (cols, rows))
     pixels = base_img.load()
     
-    # 2. 拿這張「已經帶有正確平均色彩的小圖」，去跟 27 色積木比對
     for r in range(rows):
         for c in range(cols):
             raw_rgb = tiny_pixels[c, r]
